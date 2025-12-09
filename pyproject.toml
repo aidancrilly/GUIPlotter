@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "guiplotter"
+version = "0.1.0"
+description = "GUI plotter for columnar data"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=2.1",
+    "matplotlib>=3.8"
+]
+
+[project.scripts]
+guiplotter-space = "guiplotter.entrypoints:space_delimited_main"
