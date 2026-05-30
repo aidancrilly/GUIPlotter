@@ -28,6 +28,8 @@ class SeriesSelection:
     axis: str  # "left" or "right"
     label: str
     color: str | None = None
+    linestyle: str = "-"
+    cumsum: bool = False
 
 
 __all__ = ["DataSet", "SeriesSelection"]

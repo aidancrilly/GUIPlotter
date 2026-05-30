@@ -94,12 +94,13 @@ class PlotApplication(ttk.Frame):
         frame.columnconfigure(0, weight=1)
 
         ttk.Button(frame, text="Open Files...", command=self._prompt_files).grid(row=0, column=0, sticky="ew")
-        ttk.Label(frame, textvariable=self.dataset_var, wraplength=220).grid(row=1, column=0, sticky="w", pady=(6, 0))
+        ttk.Button(frame, text="Reload Selected File", command=self._reload_dataset).grid(row=1, column=0, sticky="ew", pady=(4, 0))
+        ttk.Label(frame, textvariable=self.dataset_var, wraplength=220).grid(row=2, column=0, sticky="w", pady=(6, 0))
 
         self.dataset_list = tk.Listbox(frame, height=6, exportselection=False)
-        self.dataset_list.grid(row=2, column=0, sticky="nsew", pady=(6, 0))
+        self.dataset_list.grid(row=3, column=0, sticky="nsew", pady=(6, 0))
         scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=self.dataset_list.yview)
-        scrollbar.grid(row=2, column=1, sticky="ns", padx=(4, 0))
+        scrollbar.grid(row=3, column=1, sticky="ns", padx=(4, 0))
         self.dataset_list.configure(yscrollcommand=scrollbar.set)
         self.dataset_list.bind("<<ListboxSelect>>", self._on_dataset_select)
 
@@ -139,21 +140,33 @@ class PlotApplication(ttk.Frame):
         right_frame.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
 
         self.left_series_listbox = tk.Listbox(left_frame, height=6, exportselection=False)
-        self.left_series_listbox.grid(row=0, column=0, columnspan=2, sticky="nsew")
+        self.left_series_listbox.grid(row=0, column=0, columnspan=3, sticky="nsew")
         ttk.Button(left_frame, text="Remove", command=lambda: self._remove_series("left")).grid(
             row=1, column=0, sticky="ew", pady=(6, 0)
         )
         ttk.Button(left_frame, text="Color...", command=lambda: self._update_series_color("left")).grid(
             row=1, column=1, sticky="ew", pady=(6, 0), padx=(6, 0)
         )
+        ttk.Button(left_frame, text="Style...", command=lambda: self._update_series_linestyle("left")).grid(
+            row=1, column=2, sticky="ew", pady=(6, 0), padx=(6, 0)
+        )
+        ttk.Button(left_frame, text="Toggle Cumsum", command=lambda: self._toggle_series_cumsum("left")).grid(
+            row=2, column=0, columnspan=3, sticky="ew", pady=(4, 0)
+        )
 
         self.right_series_listbox = tk.Listbox(right_frame, height=6, exportselection=False)
-        self.right_series_listbox.grid(row=0, column=0, columnspan=2, sticky="nsew")
+        self.right_series_listbox.grid(row=0, column=0, columnspan=3, sticky="nsew")
         ttk.Button(right_frame, text="Remove", command=lambda: self._remove_series("right")).grid(
             row=1, column=0, sticky="ew", pady=(6, 0)
         )
         ttk.Button(right_frame, text="Color...", command=lambda: self._update_series_color("right")).grid(
             row=1, column=1, sticky="ew", pady=(6, 0), padx=(6, 0)
+        )
+        ttk.Button(right_frame, text="Style...", command=lambda: self._update_series_linestyle("right")).grid(
+            row=1, column=2, sticky="ew", pady=(6, 0), padx=(6, 0)
+        )
+        ttk.Button(right_frame, text="Toggle Cumsum", command=lambda: self._toggle_series_cumsum("right")).grid(
+            row=2, column=0, columnspan=3, sticky="ew", pady=(4, 0)
         )
 
     def _build_axis_controls(self, parent: ttk.Frame) -> None:
@@ -336,6 +349,10 @@ class PlotApplication(ttk.Frame):
             display = f"{selection.label} [{dataset.name}/{selection.column}]"
             if selection.color:
                 display = f"{display} ({selection.color})"
+            if selection.linestyle != "-":
+                display = f"{display} [{selection.linestyle}]"
+            if selection.cumsum:
+                display = f"{display} [cumsum]"
             if selection.axis == "left":
                 self.left_series_indices.append(index)
                 self.left_series_listbox.insert(tk.END, display)
@@ -361,14 +378,63 @@ class PlotApplication(ttk.Frame):
         current_color = self.series[target].color
         _, hex_color = colorchooser.askcolor(color=current_color, title="Select series color")
         if hex_color:
-            self.series[target] = SeriesSelection(
-                dataset_index=self.series[target].dataset_index,
-                column=self.series[target].column,
-                axis=self.series[target].axis,
-                label=self.series[target].label,
-                color=hex_color,
-            )
+            self.series[target].color = hex_color
             self._refresh_series_lists()
+
+    def _update_series_linestyle(self, axis: str) -> None:
+        listbox, index_map = self._series_widgets(axis)
+        selection = listbox.curselection()
+        if not selection:
+            return
+        target = index_map[selection[0]]
+
+        styles = [("Solid", "-"), ("Dashed", "--"), ("Dotted", ":"), ("Dash-dot", "-.")]
+        style_labels = [f"{name} ({code})" for name, code in styles]
+        style_map = {f"{name} ({code})": code for name, code in styles}
+        current = self.series[target].linestyle
+        current_label = next((f"{name} ({code})" for name, code in styles if code == current), style_labels[0])
+
+        dialog = tk.Toplevel(self)
+        dialog.title("Select Line Style")
+        dialog.resizable(False, False)
+        var = tk.StringVar(value=current_label)
+        ttk.Label(dialog, text="Line style:").pack(padx=12, pady=(12, 4))
+        ttk.Combobox(dialog, textvariable=var, values=style_labels, state="readonly", width=22).pack(padx=12, pady=4)
+
+        def _apply() -> None:
+            self.series[target].linestyle = style_map[var.get()]
+            self._refresh_series_lists()
+            dialog.destroy()
+
+        ttk.Button(dialog, text="OK", command=_apply).pack(pady=(4, 12))
+        dialog.grab_set()
+
+    def _toggle_series_cumsum(self, axis: str) -> None:
+        listbox, index_map = self._series_widgets(axis)
+        selection = listbox.curselection()
+        if not selection:
+            return
+        target = index_map[selection[0]]
+        self.series[target].cumsum = not self.series[target].cumsum
+        self._refresh_series_lists()
+
+    def _reload_dataset(self) -> None:
+        idx = self._current_dataset_index()
+        if idx is None:
+            messagebox.showinfo("Select dataset", "Choose a dataset to reload.")
+            return
+        dataset = self.datasets[idx]
+        try:
+            reloaded = self.loader([dataset.path])
+        except DataLoaderError as exc:
+            messagebox.showerror("Failed to reload", str(exc))
+            return
+        if reloaded:
+            self.datasets[idx] = reloaded[0]
+            self._refresh_dataset_list()
+            self.dataset_list.selection_set(idx)
+            self._on_dataset_select()
+            messagebox.showinfo("Reloaded", f"Dataset '{dataset.name}' reloaded successfully.")
 
     def _series_widgets(self, axis: str) -> tuple[tk.Listbox, list[int]]:
         if axis == "left":
@@ -436,13 +502,17 @@ class PlotApplication(ttk.Frame):
             x_data = x_data * x_scale
             y_scale = left_y_scale if selection.axis == "left" else right_y_scale
             y_data = y_data * y_scale
+            if selection.cumsum:
+                y_data = y_data.cumsum()
 
             target_axis = ax_left if selection.axis == "left" else ax_right
             if target_axis is None:
                 ax_right = ax_left.twinx()
                 target_axis = ax_right
 
-            (line,) = target_axis.plot(x_data, y_data, label=selection.label, color=selection.color)
+            (line,) = target_axis.plot(
+                x_data, y_data, label=selection.label, color=selection.color, linestyle=selection.linestyle
+            )
             legend_handles.append(line)
             legend_labels.append(selection.label)
 
