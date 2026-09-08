@@ -66,7 +66,8 @@ class PlotApplication(ttk.Frame):
         self.columnconfigure(1, weight=1)
         self.rowconfigure(0, weight=1)
 
-        controls = self._build_scrollable_controls()
+        controls = ttk.Frame(self, padding=10)
+        controls.grid(row=0, column=0, sticky="ns")
 
         plot_area = ttk.Frame(self, padding=5)
         plot_area.grid(row=0, column=1, sticky="nsew")
@@ -86,35 +87,6 @@ class PlotApplication(ttk.Frame):
         self.canvas.get_tk_widget().grid(row=0, column=0, sticky="nsew")
         toolbar.grid(row=1, column=0, sticky="ew")
         self.canvas.draw_idle()
-
-    def _build_scrollable_controls(self) -> ttk.Frame:
-        """Return the control column, hosted in a vertically scrollable canvas."""
-        container = ttk.Frame(self)
-        container.grid(row=0, column=0, sticky="ns")
-        container.rowconfigure(0, weight=1)
-
-        canvas = tk.Canvas(container, highlightthickness=0, borderwidth=0)
-        canvas.grid(row=0, column=0, sticky="ns")
-        scrollbar = ttk.Scrollbar(container, orient=tk.VERTICAL, command=canvas.yview)
-        scrollbar.grid(row=0, column=1, sticky="ns")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        controls = ttk.Frame(canvas, padding=10)
-        window = canvas.create_window((0, 0), window=controls, anchor="nw")
-
-        def _on_controls_configure(_: tk.Event) -> None:
-            # Keep the canvas wide enough for the controls so nothing is clipped.
-            canvas.configure(scrollregion=canvas.bbox("all"), width=controls.winfo_reqwidth())
-
-        def _on_wheel(event: tk.Event) -> None:
-            canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
-
-        controls.bind("<Configure>", _on_controls_configure)
-        canvas.bind("<Configure>", lambda event: canvas.itemconfigure(window, width=event.width))
-        # Wheel events go to the widget under the pointer, so bind globally while hovering.
-        canvas.bind("<Enter>", lambda _: canvas.bind_all("<MouseWheel>", _on_wheel))
-        canvas.bind("<Leave>", lambda _: canvas.unbind_all("<MouseWheel>"))
-        return controls
 
     def _build_file_controls(self, parent: ttk.Frame) -> None:
         frame = ttk.LabelFrame(parent, text="Data", padding=8)
