@@ -12,5 +12,12 @@ dependencies = [
     "matplotlib>=3.8"
 ]
 
-[project.scripts]
+[project.gui-scripts]
+guiplotter = "guiplotter.entrypoints:space_delimited_main"
 guiplotter-space = "guiplotter.entrypoints:space_delimited_main"
+
+[project.scripts]
+guiplotter-make-app = "guiplotter.macos_app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
